@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  getClaims: vi.fn(),
   signInWithPassword: vi.fn(),
   signUp: vi.fn(),
   resetPasswordForEmail: vi.fn(),
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     auth: {
+      getClaims: mocks.getClaims,
       signInWithPassword: mocks.signInWithPassword,
       signUp: mocks.signUp,
       resetPasswordForEmail: mocks.resetPasswordForEmail,
@@ -42,6 +44,7 @@ describe("auth server actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_SITE_URL = "http://localhost:3000";
+    mocks.getClaims.mockResolvedValue({ data: { claims: { sub: "supabase-user" } }, error: null });
   });
 
   it("rejects invalid sign-in input before calling Supabase", async () => {
@@ -90,12 +93,22 @@ describe("auth server actions", () => {
     });
   });
 
-  it("updates password only after valid reset input", async () => {
+  it("updates password only after a verified recovery session and valid input", async () => {
     mocks.updateUser.mockResolvedValue({ error: null });
 
     await expect(resetPassword(form({ password: "new-secure-password" }))).rejects.toThrow(
       "REDIRECT:/account?message=password-updated",
     );
+    expect(mocks.getClaims).toHaveBeenCalledOnce();
     expect(mocks.updateUser).toHaveBeenCalledWith({ password: "new-secure-password" });
+  });
+
+  it("rejects password reset without a verified session", async () => {
+    mocks.getClaims.mockResolvedValue({ data: { claims: null }, error: new Error("invalid") });
+
+    await expect(resetPassword(form({ password: "new-secure-password" }))).rejects.toThrow(
+      "REDIRECT:/auth/error?code=invalid-recovery-session",
+    );
+    expect(mocks.updateUser).not.toHaveBeenCalled();
   });
 });

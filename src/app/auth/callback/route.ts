@@ -9,6 +9,12 @@ function safeNextPath(candidate: string | null): string {
   return candidate;
 }
 
+function redirectWithoutCaching(target: URL) {
+  const response = NextResponse.redirect(target);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -18,9 +24,9 @@ export async function GET(request: Request) {
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(new URL(next, url.origin));
+      return redirectWithoutCaching(new URL(next, url.origin));
     }
   }
 
-  return NextResponse.redirect(new URL("/sign-in?error=auth-callback", url.origin));
+  return redirectWithoutCaching(new URL("/sign-in?error=auth-callback", url.origin));
 }

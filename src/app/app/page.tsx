@@ -5,11 +5,9 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function AppPage() {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getClaims();
 
-  if (!user) {
+  if (error || !data?.claims?.sub) {
     redirect("/sign-in");
   }
 

@@ -21,8 +21,12 @@ export function CreateOrganizationForm({ onCreate, disabled, error }: CreateOrga
   });
 
   async function submit(values: CreateOrganizationInput) {
-    await onCreate(values);
-    form.reset();
+    try {
+      await onCreate(values);
+      form.reset();
+    } catch {
+      // The owning React Query mutation exposes the API error through the error prop.
+    }
   }
 
   return (

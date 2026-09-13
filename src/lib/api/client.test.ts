@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, apiFetch } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/client";
 
 describe("apiFetch", () => {
   afterEach(() => {
@@ -61,7 +61,7 @@ describe("apiFetch", () => {
       accessToken: "access-token",
     });
 
-    await expect(request).rejects.toMatchObject<ApiError>({
+    await expect(request).rejects.toMatchObject({
       status: 409,
       problem,
     });

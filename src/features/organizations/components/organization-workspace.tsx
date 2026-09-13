@@ -47,7 +47,7 @@ export function OrganizationWorkspace() {
       if (!active) return;
       setAccessToken(session?.access_token);
       setSessionReady(true);
-      if (!session) {
+      if (!session && !authRecoveryStartedRef.current) {
         router.replace("/sign-in");
       }
     });

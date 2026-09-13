@@ -26,6 +26,10 @@ export function listOrganizations(accessToken: string) {
   return apiFetch<Organization[]>("/api/v1/organizations", { accessToken });
 }
 
+export function getOrganization(accessToken: string, organizationId: string) {
+  return apiFetch<Organization>(`/api/v1/organizations/${organizationId}`, { accessToken });
+}
+
 export function createOrganization(accessToken: string, input: CreateOrganizationInput) {
   return apiFetch<Organization>("/api/v1/organizations", {
     method: "POST",

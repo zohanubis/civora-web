@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { signOut } from "@/features/auth/api/auth";
 import {
@@ -10,15 +10,19 @@ import {
   createOrganization,
   getCurrentUser,
   listOrganizations,
-  type Organization,
   updateOrganization,
 } from "@/features/organizations/api/organizations";
 import { CreateOrganizationForm } from "@/features/organizations/components/create-organization-form";
+import { OrganizationCard } from "@/features/organizations/components/organization-card";
 import { OrganizationSwitcher } from "@/features/organizations/components/organization-switcher";
 import type {
   CreateOrganizationInput,
   UpdateOrganizationInput,
 } from "@/features/organizations/schemas/organization";
+import {
+  isUnauthorized,
+  organizationErrorMessage,
+} from "@/features/organizations/utils/errors";
 import { ApiError } from "@/lib/api/client";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -72,6 +76,7 @@ export function OrganizationWorkspace() {
       } finally {
         queryClient.clear();
         setAccessToken(undefined);
+        setSelectedOrganizationId(undefined);
         router.replace("/sign-in?reason=session-expired");
         router.refresh();
       }
@@ -193,7 +198,7 @@ export function OrganizationWorkspace() {
         disabled={!currentUserQuery.data || createMutation.isPending}
         error={
           createMutation.error && !isUnauthorized(createMutation.error)
-            ? errorMessage(createMutation.error)
+            ? organizationErrorMessage(createMutation.error)
             : undefined
         }
       />
@@ -244,169 +249,11 @@ export function OrganizationWorkspace() {
   );
 }
 
-type OrganizationCardProps = {
-  organization: Organization;
-  selected: boolean;
-  updating: boolean;
-  archiving: boolean;
-  onUpdate: (input: UpdateOrganizationInput) => Promise<void>;
-  onArchive: () => Promise<void>;
-};
-
-function OrganizationCard({
-  organization,
-  selected,
-  updating,
-  archiving,
-  onUpdate,
-  onArchive,
-}: OrganizationCardProps) {
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(organization.name);
-  const [description, setDescription] = useState(organization.description ?? "");
-  const [error, setError] = useState<string>();
-
-  useEffect(() => {
-    if (!editing) {
-      setName(organization.name);
-      setDescription(organization.description ?? "");
-    }
-  }, [editing, organization.description, organization.name]);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(undefined);
-    const normalizedName = name.trim();
-    if (!normalizedName || normalizedName.length > 160) {
-      setError("Organization name must be 1-160 characters.");
-      return;
-    }
-    try {
-      await onUpdate({ name: normalizedName, description });
-      setEditing(false);
-    } catch (caught) {
-      if (!isUnauthorized(caught)) {
-        setError(errorMessage(caught));
-      }
-    }
-  }
-
-  async function archive() {
-    if (!window.confirm(`Archive ${organization.name}?`)) return;
-    setError(undefined);
-    try {
-      await onArchive();
-    } catch (caught) {
-      if (!isUnauthorized(caught)) {
-        setError(errorMessage(caught));
-      }
-    }
-  }
-
-  return (
-    <article
-      aria-current={selected ? "true" : undefined}
-      className="rounded-2xl border p-5"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="break-words font-semibold">{organization.name}</h3>
-            {selected && (
-              <span className="rounded-full border px-2 py-0.5 text-xs">Current context</span>
-            )}
-          </div>
-          <p className="break-all text-sm text-neutral-500">/{organization.slug}</p>
-          <p className="mt-2 break-words text-sm text-neutral-600">
-            {organization.description || "No description"}
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-1 text-xs">
-          {organization.status}
-        </span>
-      </div>
-
-      {organization.status === "ACTIVE" && (
-        <div className="mt-4">
-          {!editing ? (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="rounded-lg border px-3 py-1.5 text-sm"
-                onClick={() => setEditing(true)}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                className="rounded-lg border px-3 py-1.5 text-sm"
-                disabled={archiving}
-                onClick={archive}
-              >
-                {archiving ? "Archiving…" : "Archive"}
-              </button>
-            </div>
-          ) : (
-            <form className="space-y-3" onSubmit={submit}>
-              <input
-                aria-label="Organization name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="w-full rounded-lg border px-3 py-2"
-              />
-              <textarea
-                aria-label="Organization description"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                className="w-full rounded-lg border px-3 py-2"
-                rows={3}
-              />
-              {error && <p className="text-sm text-red-700">{error}</p>}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="rounded-lg bg-neutral-950 px-3 py-1.5 text-sm text-white"
-                  disabled={updating}
-                >
-                  {updating ? "Saving…" : "Save"}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border px-3 py-1.5 text-sm"
-                  onClick={() => {
-                    setError(undefined);
-                    setEditing(false);
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-          {error && !editing && <p className="mt-2 text-sm text-red-700">{error}</p>}
-        </div>
-      )}
-    </article>
-  );
-}
-
 function ErrorNotice({ title, error }: { title: string; error: unknown }) {
   return (
     <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
       <p className="font-medium">{title}</p>
-      <p>{errorMessage(error)}</p>
+      <p>{organizationErrorMessage(error)}</p>
     </div>
   );
-}
-
-function isUnauthorized(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 401;
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError && error.problem && typeof error.problem === "object") {
-    const detail = "detail" in error.problem ? error.problem.detail : undefined;
-    if (typeof detail === "string") return detail;
-  }
-  if (error instanceof Error) return error.message;
-  return "Unexpected error.";
 }

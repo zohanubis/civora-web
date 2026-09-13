@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { apiFetch } from "@/lib/api/client";
+import { ApiError, apiFetch } from "@/lib/api/client";
 
 describe("apiFetch", () => {
   afterEach(() => {
@@ -37,5 +37,33 @@ describe("apiFetch", () => {
         accessToken: "access-token",
       }),
     ).resolves.toBeUndefined();
+  });
+
+  it("preserves RFC 9457 problem details on API failures", async () => {
+    const problem = {
+      type: "https://civora.dev/problems/organization-conflict",
+      title: "Organization conflict",
+      status: 409,
+      detail: "Organization slug already exists.",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(problem), {
+          status: 409,
+          headers: { "Content-Type": "application/problem+json" },
+        }),
+      ),
+    );
+
+    const request = apiFetch("/api/v1/organizations", {
+      method: "POST",
+      accessToken: "access-token",
+    });
+
+    await expect(request).rejects.toMatchObject<ApiError>({
+      status: 409,
+      problem,
+    });
   });
 });

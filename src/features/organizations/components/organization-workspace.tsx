@@ -14,6 +14,7 @@ import {
   updateOrganization,
 } from "@/features/organizations/api/organizations";
 import { CreateOrganizationForm } from "@/features/organizations/components/create-organization-form";
+import { OrganizationSwitcher } from "@/features/organizations/components/organization-switcher";
 import type {
   CreateOrganizationInput,
   UpdateOrganizationInput,
@@ -26,6 +27,7 @@ export function OrganizationWorkspace() {
   const queryClient = useQueryClient();
   const [accessToken, setAccessToken] = useState<string>();
   const [sessionReady, setSessionReady] = useState(false);
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string>();
   const authRecoveryStartedRef = useRef(false);
 
   useEffect(() => {
@@ -93,7 +95,8 @@ export function OrganizationWorkspace() {
 
   const createMutation = useMutation({
     mutationFn: (input: CreateOrganizationInput) => createOrganization(accessToken!, input),
-    onSuccess: async () => {
+    onSuccess: async (organization) => {
+      setSelectedOrganizationId(organization.id);
       await queryClient.invalidateQueries({ queryKey: ["organizations"] });
     },
     onError: (error) => {
@@ -130,12 +133,27 @@ export function OrganizationWorkspace() {
     void recoverFromUnauthorized(organizationsQuery.error);
   }, [organizationsQuery.error, recoverFromUnauthorized]);
 
+  useEffect(() => {
+    const organizations = organizationsQuery.data;
+    if (!organizations || organizations.length === 0) {
+      setSelectedOrganizationId(undefined);
+      return;
+    }
+
+    if (!selectedOrganizationId || !organizations.some(({ id }) => id === selectedOrganizationId)) {
+      const defaultOrganization =
+        organizations.find(({ status }) => status === "ACTIVE") ?? organizations[0];
+      setSelectedOrganizationId(defaultOrganization.id);
+    }
+  }, [organizationsQuery.data, selectedOrganizationId]);
+
   async function handleSignOut() {
     try {
       await signOut();
     } finally {
       queryClient.clear();
       setAccessToken(undefined);
+      setSelectedOrganizationId(undefined);
       router.replace("/sign-in");
       router.refresh();
     }
@@ -180,12 +198,19 @@ export function OrganizationWorkspace() {
         }
       />
 
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold">Your organizations</h2>
-          <p className="text-sm text-neutral-600">
-            Only active memberships returned by the API appear here.
-          </p>
+      <section className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Your organizations</h2>
+            <p className="text-sm text-neutral-600">
+              Only active memberships returned by the API appear here.
+            </p>
+          </div>
+          <OrganizationSwitcher
+            organizations={organizationsQuery.data ?? []}
+            value={selectedOrganizationId}
+            onChange={setSelectedOrganizationId}
+          />
         </div>
 
         {organizationsQuery.isPending && (
@@ -204,6 +229,7 @@ export function OrganizationWorkspace() {
             <OrganizationCard
               key={organization.id}
               organization={organization}
+              selected={organization.id === selectedOrganizationId}
               updating={updateMutation.isPending}
               archiving={archiveMutation.isPending}
               onUpdate={(input) =>
@@ -220,6 +246,7 @@ export function OrganizationWorkspace() {
 
 type OrganizationCardProps = {
   organization: Organization;
+  selected: boolean;
   updating: boolean;
   archiving: boolean;
   onUpdate: (input: UpdateOrganizationInput) => Promise<void>;
@@ -228,6 +255,7 @@ type OrganizationCardProps = {
 
 function OrganizationCard({
   organization,
+  selected,
   updating,
   archiving,
   onUpdate,
@@ -276,10 +304,18 @@ function OrganizationCard({
   }
 
   return (
-    <article className="rounded-2xl border p-5">
+    <article
+      aria-current={selected ? "true" : undefined}
+      className="rounded-2xl border p-5"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="break-words font-semibold">{organization.name}</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="break-words font-semibold">{organization.name}</h3>
+            {selected && (
+              <span className="rounded-full border px-2 py-0.5 text-xs">Current context</span>
+            )}
+          </div>
           <p className="break-all text-sm text-neutral-500">/{organization.slug}</p>
           <p className="mt-2 break-words text-sm text-neutral-600">
             {organization.description || "No description"}

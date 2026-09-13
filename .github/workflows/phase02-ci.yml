@@ -1,0 +1,77 @@
+name: Phase 02 Web CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase02-web-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:8080
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_phase02_ci_placeholder
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Enable pnpm 11.25.0
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.25.0 --activate
+          pnpm --version
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [[ -f pnpm-lock.yaml ]]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install --no-frozen-lockfile
+          fi
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser smoke tests
+        run: pnpm test:e2e
+
+      - name: Persist generated lockfile
+        if: success()
+        shell: bash
+        run: |
+          if [[ -n "$(git status --porcelain -- pnpm-lock.yaml)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add pnpm-lock.yaml
+            git commit -m "chore: lock Phase 02 web dependencies"
+            git push origin HEAD:${{ github.head_ref }}
+          fi

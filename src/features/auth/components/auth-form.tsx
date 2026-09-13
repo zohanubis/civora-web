@@ -33,23 +33,32 @@ export function AuthForm({ mode }: AuthFormProps) {
     setMessage(undefined);
     setServerError(undefined);
 
-    const result =
-      mode === "sign-in"
-        ? await signIn(values.email, values.password)
-        : await signUp(values.email, values.password);
+    try {
+      const result =
+        mode === "sign-in"
+          ? await signIn(values.email, values.password)
+          : await signUp(values.email, values.password);
 
-    if (result.error) {
-      setServerError(result.error.message);
-      return;
+      if (result.error) {
+        setServerError(result.error.message);
+        return;
+      }
+
+      if (mode === "sign-up" && !result.data.session) {
+        setMessage("Check your email to confirm your account, then continue to Civora.");
+        return;
+      }
+
+      if (mode === "sign-in" && !result.data.session) {
+        setServerError("Civora could not establish an authenticated session. Please sign in again.");
+        return;
+      }
+
+      router.replace("/app");
+      router.refresh();
+    } catch {
+      setServerError("Unable to reach the authentication service. Please try again.");
     }
-
-    if (mode === "sign-up" && !result.data.session) {
-      setMessage("Check your email to confirm your account, then continue to Civora.");
-      return;
-    }
-
-    router.replace("/app");
-    router.refresh();
   }
 
   const isSignIn = mode === "sign-in";
@@ -88,8 +97,16 @@ export function AuthForm({ mode }: AuthFormProps) {
         )}
       </div>
 
-      {serverError && <p className="text-sm text-red-700">{serverError}</p>}
-      {message && <p className="text-sm text-emerald-700">{message}</p>}
+      {serverError && (
+        <p role="alert" className="text-sm text-red-700">
+          {serverError}
+        </p>
+      )}
+      {message && (
+        <p role="status" className="text-sm text-emerald-700">
+          {message}
+        </p>
+      )}
 
       <button
         type="submit"
@@ -99,7 +116,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         {form.formState.isSubmitting ? "Please wait…" : isSignIn ? "Sign in" : "Create account"}
       </button>
 
-      <div className="flex justify-between text-sm">
+      <div className="flex flex-wrap justify-between gap-2 text-sm">
         <Link className="underline" href={isSignIn ? "/sign-up" : "/sign-in"}>
           {isSignIn ? "Create an account" : "Already have an account?"}
         </Link>

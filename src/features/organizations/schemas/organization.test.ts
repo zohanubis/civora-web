@@ -13,6 +13,19 @@ describe("createOrganizationSchema", () => {
     ).toBe(true);
   });
 
+  it("canonicalizes slug casing before submission", () => {
+    const result = createOrganizationSchema.safeParse({
+      slug: " Community-One ",
+      name: "Community One",
+      description: "",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.slug).toBe("community-one");
+    }
+  });
+
   it("rejects spaces and invalid slug bounds", () => {
     expect(
       createOrganizationSchema.safeParse({

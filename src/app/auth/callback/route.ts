@@ -2,11 +2,10 @@ import { NextResponse } from "next/server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+const CALLBACK_DESTINATIONS = new Set(["/app", "/reset-password"]);
+
 function safeNextPath(candidate: string | null): string {
-  if (!candidate || !candidate.startsWith("/") || candidate.startsWith("//")) {
-    return "/app";
-  }
-  return candidate;
+  return candidate && CALLBACK_DESTINATIONS.has(candidate) ? candidate : "/app";
 }
 
 function redirectWithoutCaching(target: URL) {
